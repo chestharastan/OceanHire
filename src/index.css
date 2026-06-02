@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+  body {
+    @apply bg-white text-navy-900 antialiased font-sans;
+  }
+}
+
+@layer components {
+  .container-x {
+    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  }
+  .field-label {
+    @apply mb-1.5 block text-sm font-medium text-navy-800;
+  }
+  .field {
+    @apply w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-navy-900
+           placeholder:text-slate-400 transition-colors
+           focus:border-ocean focus:outline-none focus:ring-2 focus:ring-ocean/20;
+  }
+  .file-field {
+    @apply w-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-500
+           transition-colors hover:border-ocean
+           file:mr-3 file:rounded-md file:border-0 file:bg-ocean/10 file:px-3 file:py-1.5
+           file:text-sm file:font-medium file:text-ocean hover:file:bg-ocean/20;
+  }
+}
+
+/* Scroll-reveal — toggled by the Reveal component via IntersectionObserver */
+.reveal {
+  opacity: 0;
+  transform: translateY(var(--reveal-y, 28px));
+  transition:
+    opacity 0.7s ease,
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: opacity, transform;
+}
+.reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+
+/* Layered hero waves drifting sideways for a living ocean */
+.wave-layer {
+  position: absolute;
+  inset-inline: -5%;
+  bottom: 0;
+  width: 110%;
+}
+.wave-drift-slow { animation: wave-drift 14s ease-in-out infinite; }
+.wave-drift-fast { animation: wave-drift 9s ease-in-out infinite reverse; }
+@keyframes wave-drift {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(-3%); }
+}
+
+/* Floating bubbles rising through the hero */
+.bubble {
+  position: absolute;
+  bottom: -40px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.45), rgba(201, 168, 76, 0.12));
+  animation: bubble-rise linear infinite;
+}
+@keyframes bubble-rise {
+  0% { transform: translateY(0) scale(0.6); opacity: 0; }
+  10% { opacity: 0.7; }
+  90% { opacity: 0.5; }
+  100% { transform: translateY(-92vh) scale(1.1); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .wave-drift-slow, .wave-drift-fast, .bubble { animation: none; }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar { width: 10px; }
+::-webkit-scrollbar-track { background: #0a1628; }
+::-webkit-scrollbar-thumb { background: #1e4d8c; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: #2a5fa3; }
