@@ -63,7 +63,7 @@ export default function Voyage() {
     }
     // Slow zoom-out on the active image
     const el = media.current[i]
-    if (el) el.style.transform = `scale(${(1.22 - cp * 0.2).toFixed(4)}) translate3d(0,${((0.5 - cp) * 24).toFixed(2)}px,0)`
+    if (el) el.style.transform = `scale(${(1.12 - cp * 0.1).toFixed(4)}) translate3d(0,${((0.5 - cp) * 16).toFixed(2)}px,0)`
   })
 
   const jump = (i) => {
@@ -132,7 +132,7 @@ export default function Voyage() {
           </div>
 
           {/* chapter image — crossfades, slowly zooming out */}
-          <div className="relative order-1 mx-auto aspect-[16/10] w-full max-w-xl lg:order-2 lg:col-span-6 lg:aspect-[4/4.2] lg:max-w-none">
+          <div className="relative order-1 mx-auto aspect-[16/10] w-full max-w-xl lg:order-2 lg:col-span-6 lg:aspect-[5/4] lg:max-w-none">
             <div className="absolute inset-0 overflow-hidden rounded-3xl">
               {VOYAGE.map((c, i) => (
                 <div
@@ -141,7 +141,7 @@ export default function Voyage() {
                   style={{ opacity: i === idx ? 1 : 0 }}
                   aria-hidden={i !== idx}
                 >
-                  <div ref={(el) => (media.current[i] = el)} className="gpu absolute inset-0" style={{ transform: 'scale(1.22)' }}>
+                  <div ref={(el) => (media.current[i] = el)} className="gpu absolute inset-0" style={{ transform: 'scale(1.12)' }}>
                     <MediaSlot item={{ ...MEDIA[c.media], aspect: '1 / 1' }} fill rounded="rounded-none" />
                   </div>
                 </div>

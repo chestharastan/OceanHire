@@ -28,15 +28,24 @@ npm run preview
 Typography: **Archivo** variable (wide caps at `font-stretch: 125%`, condensed at `62%`, body at `100%`) +
 **Instrument Serif** italic accents. Both are self-hosted via `@fontsource` (no Google Fonts request).
 
-## Adding your media (nothing is hard-coded)
+## Photos & media (nothing is hard-coded)
 
-Every image/video/3D model is a *slot* declared in **`src/config/media.js`**. Until you set a `src`, the slot shows a
-labelled placeholder with the recommended size, so the layout is already final.
+Every image/video/3D model is a *slot* declared in **`src/config/media.js`** and rendered by `<MediaSlot>`.
 
-1. Drop the file into `public/media/` (images / video) or `public/models/` (`.glb`).
-2. In `src/config/media.js` set that slot's `src`, e.g. `src: '/media/crew-bridge.webp'` (add `srcSet` / `poster` if you have them).
-3. Done — no component changes. Add/remove entries in `MEDIA.gallery` freely.
+The site currently ships **14 free-to-use stock photos from [Unsplash](https://unsplash.com)** (Unsplash License: free for
+commercial use, attribution not required — but credited in the footer anyway). They live in `public/media/` as an 800 px and a
+1400 px WebP each (~1.6 MB for all, lazy-loaded, served with `srcset`). They are **illustrative** — swap in photos of your own
+crew and vessels when you have them.
 
+To replace a photo:
+
+1. Export it as WebP/AVIF (≈800 px and ≈1400 px wide) into `public/media/`, named `<slug>-800.webp` / `<slug>-1400.webp`.
+2. In `src/config/media.js` point the slot at the new slug (the `photo('slug', {…})` helper builds `src` + `srcSet`), and set
+   `alt` (describe the picture), `focus` (the point that must stay in frame when the photo is cropped, e.g. `'50% 30%'`) and
+   `credit` (or drop `credit` for your own photos — the footer credit line is generated from the manifest).
+3. Done — no component changes. Add/remove entries in `MEDIA.gallery` freely (keep a tall `4 / 5` / short `4 / 3` rhythm).
+
+A slot built with `slot('Label', 'hint')` instead of `photo(…)` shows a labelled placeholder with the recommended size.
 Recommended: images WebP/AVIF ≤ 300 KB · video MP4 (H.264) ≤ 3 MB, muted loop · GLB ≤ 2 MB, ~30k tris, Draco/meshopt.
 Setting `MODELS.ship.src` swaps the procedural ship for your model in both the wireframe view and the sailing boat.
 

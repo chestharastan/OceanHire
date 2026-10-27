@@ -38,16 +38,18 @@ export default function MediaSlot({ id, item, className = '', fill = false, roun
             playsInline
             preload="metadata"
             className="h-full w-full object-cover"
+            style={{ objectPosition: m.focus || '50% 50%' }}
           />
         ) : (
           <img
             src={m.src}
             srcSet={m.srcSet || undefined}
-            sizes="(min-width: 1024px) 40vw, 90vw"
+            sizes={m.sizes || '(min-width: 1024px) 40vw, 90vw'}
             alt={m.alt}
             loading="lazy"
             decoding="async"
             className="h-full w-full object-cover"
+            style={{ objectPosition: m.focus || '50% 50%' }}
           />
         )}
         {children}
