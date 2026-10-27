@@ -1,17 +1,24 @@
 <!doctype html>
-<html lang="en" class="scroll-smooth">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/anchor.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#06182b" />
+    <meta name="color-scheme" content="dark light" />
     <meta name="description" content="OceanHire — Maritime and cruise ship recruitment. Your career at sea starts here." />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <meta property="og:title" content="OceanHire — Your Career at Sea Starts Here" />
+    <meta property="og:description" content="Specialist maritime and cruise recruitment. Deck, engine, hospitality, entertainment, medical and administration roles worldwide." />
+    <meta property="og:type" content="website" />
     <title>OceanHire — Your Career at Sea Starts Here</title>
+    <style>
+      /* Painted before any JS/CSS bundle arrives so there is never a white flash. */
+      html { background: #06182b; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <noscript>OceanHire needs JavaScript to run the application form and the 3D experience.</noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

@@ -1,47 +1,35 @@
 import { useState } from 'react'
-import { Plus, Minus, HelpCircle } from 'lucide-react'
+import { Plus, Minus } from 'lucide-react'
 import Reveal from './Reveal.jsx'
+import Split from './Split.jsx'
+import { FAQS } from '../config/site.js'
 
-const faqs = [
-  {
-    q: 'Do I need previous maritime experience to apply?',
-    a: 'Not always. Many hospitality, entertainment and administration roles welcome talented people from shoreside industries. Deck, engine and medical positions usually require relevant certification and sea time, which we will guide you through.',
-  },
-  {
-    q: 'Does OceanHire charge candidates a recruitment fee?',
-    a: 'No. In line with the Maritime Labour Convention, we never charge seafarers a fee to be placed. Our services to candidates are completely free — employers cover the cost of recruitment.',
-  },
-  {
-    q: 'What documents and certifications will I need?',
-    a: 'At minimum an up-to-date CV and a valid passport. Depending on the role you may also need STCW basic safety training, a seaman’s book, a medical (ENG1 or equivalent) and trade-specific certificates. We will give you a personalised checklist after your application.',
-  },
-  {
-    q: 'How long are contracts and what is the pay like?',
-    a: 'Contracts typically run from 4 to 9 months on board followed by paid or unpaid leave, depending on the company and department. Salaries vary by role, rank and fleet; your coordinator will share exact figures for any position you are matched with.',
-  },
-  {
-    q: 'How long does the hiring process take?',
-    a: 'After you apply, expect an initial response within 3–5 business days. From interview to joining a vessel usually takes 4–10 weeks, mostly driven by document processing, medicals and visa timelines.',
-  },
-]
-
-function Item({ faq, open, onToggle }) {
+// Accordion (Manus-style FAQ). The answer panel animates with grid-rows 0fr → 1fr,
+// which transitions height without measuring anything in JS.
+function Item({ i, faq, open, onToggle }) {
+  const id = `faq-${i}`
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white transition-colors hover:border-ocean/30">
-      <button
-        type="button"
-        onClick={onToggle}
-        className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left"
-        aria-expanded={open}
-      >
-        <span className="text-base font-semibold text-navy-900">{faq.q}</span>
-        <span className={`flex h-8 w-8 flex-none items-center justify-center rounded-full transition-colors ${open ? 'bg-ocean text-white' : 'bg-slate-100 text-ocean'}`}>
-          {open ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-        </span>
-      </button>
-      <div className={`grid transition-all duration-300 ease-in-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
+    <div className="border-b border-foam/12">
+      <h3>
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={id}
+          className="group flex w-full items-start gap-5 py-6 text-left sm:gap-8 sm:py-8"
+        >
+          <span className="num serif-i pt-1 text-lg text-aqua">0{i + 1}</span>
+          <span className={`serif flex-1 text-[clamp(1.5rem,2.8vw,2.3rem)] leading-[1.1] transition-opacity ${open ? 'opacity-100' : 'opacity-70 group-hover:opacity-100'}`}>
+            {faq.q}
+          </span>
+          <span className={`mt-1 grid h-9 w-9 flex-none place-items-center rounded-full border transition-colors ${open ? 'border-foam bg-foam text-ink' : 'border-foam/25'}`}>
+            {open ? <Minus className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+          </span>
+        </button>
+      </h3>
+      <div id={id} role="region" className={`grid transition-[grid-template-rows,opacity] duration-500 ease-out ${open ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0'}`}>
         <div className="overflow-hidden">
-          <p className="px-6 pb-5 text-sm leading-relaxed text-slate-600">{faq.a}</p>
+          <p className="max-w-2xl pb-8 pl-[2.9rem] pr-14 leading-relaxed text-foam/70 sm:pl-[3.9rem]">{faq.a}</p>
         </div>
       </div>
     </div>
@@ -52,28 +40,27 @@ export default function FAQ() {
   const [open, setOpen] = useState(0)
 
   return (
-    <section id="faq" className="bg-slate-50 py-20 sm:py-28">
-      <div className="container-x grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-16">
-        <Reveal className="lg:sticky lg:top-28 lg:self-start">
-          <span className="inline-flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-ocean">
-            <HelpCircle className="h-4 w-4" /> FAQ
-          </span>
-          <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-navy-900 sm:text-4xl">
-            Questions, answered
-          </h2>
-          <p className="mt-4 text-lg text-slate-600">
-            Everything you need to know before setting sail with OceanHire. Still unsure?
-            Reach out via the contact form below.
-          </p>
-        </Reveal>
-
-        <div className="space-y-4">
-          {faqs.map((faq, i) => (
-            <Reveal key={faq.q} delay={i * 80}>
-              <Item faq={faq} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)} />
-            </Reveal>
-          ))}
+    <section id="faq" className="relative py-24 sm:py-32">
+      <div className="container-x grid gap-12 lg:grid-cols-[0.8fr_1.2fr] lg:gap-20">
+        <div className="lg:sticky lg:top-28 lg:self-start">
+          <Reveal>
+            <span className="eyebrow text-aqua">FAQ</span>
+          </Reveal>
+          <Split as="h2" className="display mt-5 block text-[clamp(2.2rem,5vw,4.4rem)]" text={[{ t: 'Questions,' }, { t: 'answered', c: 'serif-i' }]} />
+          <Reveal delay={150}>
+            <p className="mt-6 max-w-sm text-lg leading-relaxed text-foam/70">
+              Everything you need to know before setting sail with OceanHire. Still unsure? Reach out via the contact form below.
+            </p>
+          </Reveal>
         </div>
+
+        <Reveal delay={100}>
+          <div className="border-t border-foam/12">
+            {FAQS.map((faq, i) => (
+              <Item key={faq.q} i={i} faq={faq} open={open === i} onToggle={() => setOpen(open === i ? -1 : i)} />
+            ))}
+          </div>
+        </Reveal>
       </div>
     </section>
   )

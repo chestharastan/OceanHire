@@ -1,22 +1,24 @@
-import { Anchor, Linkedin, Instagram, Facebook } from 'lucide-react'
+import { ArrowUp, Linkedin, Instagram, Facebook } from 'lucide-react'
+import Logo from './Logo.jsx'
+import { scrollToId, scrollToTop } from '../lib/scroll.js'
 
 const cols = [
   {
     title: 'Company',
     links: [
-      { label: 'About', href: '#about' },
-      { label: 'Departments', href: '#departments' },
-      { label: 'FAQ', href: '#faq' },
-      { label: 'Contact', href: '#contact' },
+      { label: 'About', id: 'about' },
+      { label: 'Departments', id: 'departments' },
+      { label: 'Process', id: 'voyage' },
+      { label: 'Contact', id: 'contact' },
     ],
   },
   {
     title: 'Candidates',
     links: [
-      { label: 'Apply Now', href: '#apply' },
-      { label: 'Document Checklist', href: '#apply' },
-      { label: 'Life at Sea', href: '#about' },
-      { label: 'FAQ', href: '#faq' },
+      { label: 'Apply Now', id: 'apply' },
+      { label: 'Life at Sea', id: 'life' },
+      { label: 'Set sail', id: 'sail' },
+      { label: 'FAQ', id: 'faq' },
     ],
   },
   {
@@ -38,26 +40,17 @@ const socials = [
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/10 bg-navy-900 text-slate-300">
-      <div className="container-x grid gap-10 py-14 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,1fr)]">
+    <footer className="relative overflow-hidden border-t border-foam/10 bg-abyss/40 backdrop-blur-[2px]">
+      <div className="container-x grid gap-12 py-16 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,1fr)]">
         <div className="max-w-xs">
-          <a href="#home" className="flex items-center gap-2.5">
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-ocean to-navy-700 ring-1 ring-gold/40">
-              <Anchor className="h-5 w-5 text-gold" strokeWidth={2.2} />
-            </span>
-            <span className="text-lg font-extrabold tracking-tight text-white">
-              Ocean<span className="text-gold">Hire</span>
-            </span>
-          </a>
-          <p className="mt-4 text-sm leading-relaxed text-slate-400">
-            Specialist maritime and cruise recruitment. Connecting great people with
-            great fleets, fairly and transparently.
+          <Logo />
+          <p className="mt-5 text-sm leading-relaxed text-foam/55">
+            Specialist maritime and cruise recruitment. Connecting great people with great fleets, fairly and transparently.
           </p>
-          <div className="mt-5 flex gap-3">
+          <div className="mt-6 flex gap-3">
             {socials.map((s) => (
-              <a key={s.label} href={s.href} aria-label={s.label}
-                className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-slate-300 transition-colors hover:bg-gold hover:text-navy-900">
-                <s.icon className="h-[18px] w-[18px]" />
+              <a key={s.label} href={s.href} aria-label={s.label} className="grid h-10 w-10 place-items-center rounded-full border border-foam/20 transition-colors hover:bg-foam hover:text-ink">
+                <s.icon className="h-[17px] w-[17px]" />
               </a>
             ))}
           </div>
@@ -65,11 +58,15 @@ export default function Footer() {
 
         {cols.map((col) => (
           <div key={col.title}>
-            <h4 className="text-sm font-semibold uppercase tracking-wider text-white">{col.title}</h4>
-            <ul className="mt-4 space-y-2.5">
+            <h4 className="eyebrow text-foam/45">{col.title}</h4>
+            <ul className="mt-5 space-y-3">
               {col.links.map((l) => (
                 <li key={l.label}>
-                  <a href={l.href} className="text-sm text-slate-400 transition-colors hover:text-gold">
+                  <a
+                    href={l.id ? `#${l.id}` : l.href}
+                    onClick={l.id ? (e) => { e.preventDefault(); scrollToId(l.id) } : undefined}
+                    className="text-sm text-foam/75 transition-colors hover:text-aqua"
+                  >
                     {l.label}
                   </a>
                 </li>
@@ -79,12 +76,20 @@ export default function Footer() {
         ))}
       </div>
 
-      <div className="border-t border-white/10">
-        <div className="container-x flex flex-col items-center justify-between gap-3 py-6 sm:flex-row">
-          <p className="text-sm text-slate-400">
-            © {new Date().getFullYear()} OceanHire. All rights reserved.
-          </p>
-          <p className="text-sm text-slate-500">Charting careers across every ocean.</p>
+      {/* Giant wordmark, clipped at the bottom edge (Noomo-style footer) */}
+      <div aria-hidden="true" className="pointer-events-none -mb-[2.2vw] select-none whitespace-nowrap text-center">
+        <span className="display block text-[12.1vw] leading-[0.8] text-foam/[0.07]">OceanHire</span>
+      </div>
+
+      <div className="border-t border-foam/10">
+        <div className="container-x flex flex-col items-center justify-between gap-4 py-6 sm:flex-row">
+          <p className="text-sm text-foam/45">© {new Date().getFullYear()} OceanHire. All rights reserved.</p>
+          <button type="button" onClick={scrollToTop} className="eyebrow group flex items-center gap-3 text-foam/60 transition-colors hover:text-foam">
+            Back to surface
+            <span className="grid h-9 w-9 place-items-center rounded-full border border-foam/25 transition-colors group-hover:bg-foam group-hover:text-ink">
+              <ArrowUp className="h-4 w-4" />
+            </span>
+          </button>
         </div>
       </div>
     </footer>

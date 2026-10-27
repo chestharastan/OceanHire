@@ -3,55 +3,28 @@ export default {
   content: ['./index.html', './src/**/*.{js,jsx}'],
   theme: {
     extend: {
+      // Palette: a pastel dawn sky (Noomo) sinking into deep water (Igloo),
+      // with a warm peach-gold accent borrowed from Persepolis.
       colors: {
-        navy: {
-          DEFAULT: '#0a1628',
-          900: '#0a1628',
-          800: '#0d1d35',
-          700: '#122845',
-        },
-        ocean: {
-          DEFAULT: '#1e4d8c',
-          600: '#1e4d8c',
-          500: '#2a5fa3',
-          400: '#3b75bd',
-        },
-        gold: {
-          DEFAULT: '#c9a84c',
-          400: '#d4b969',
-          600: '#b3923a',
-        },
+        ink: '#07101d',
+        abyss: '#020a14',
+        deep: '#06182b',
+        sea: '#0d3556',
+        tide: '#1d6a8f',
+        aqua: '#7de3d6',
+        sky: '#c9d2e7',
+        mist: '#eaeef7',
+        foam: '#f4f6fb',
+        sun: '#f3c892',
       },
       fontFamily: {
-        sans: ['"Plus Jakarta Sans"', 'Inter', 'system-ui', 'sans-serif'],
+        // One variable family covers both the wide display caps (font-stretch 125%)
+        // and the regular-width body text — fewer font files to download.
+        sans: ['"Archivo Variable"', 'system-ui', 'sans-serif'],
+        serif: ['"Instrument Serif"', 'Georgia', 'serif'],
       },
-      boxShadow: {
-        soft: '0 10px 40px -15px rgba(10, 22, 40, 0.25)',
-        card: '0 4px 24px -8px rgba(10, 22, 40, 0.18)',
-      },
-      keyframes: {
-        'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(20px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        'wave': {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-8px)' },
-        },
-        'float': {
-          '0%, 100%': { transform: 'translateY(0)' },
-          '50%': { transform: 'translateY(-14px)' },
-        },
-        'float-slow': {
-          '0%, 100%': { transform: 'translateY(0) translateX(0)' },
-          '50%': { transform: 'translateY(-22px) translateX(10px)' },
-        },
-      },
-      animation: {
-        'fade-up': 'fade-up 0.7s ease-out forwards',
-        'wave': 'wave 6s ease-in-out infinite',
-        'float': 'float 7s ease-in-out infinite',
-        'float-slow': 'float-slow 11s ease-in-out infinite',
+      transitionTimingFunction: {
+        out: 'cubic-bezier(0.16, 1, 0.3, 1)',
       },
     },
   },
