@@ -2,86 +2,212 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Tokens ──────────────────────────────────────────────────────────────── */
+:root {
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --pad: clamp(1.25rem, 4vw, 3.5rem); /* page gutter */
+  /* Gutter for full-bleed rows (carousel) so their first card lines up with .container-x content */
+  --gutter: calc(max(0px, (100vw - 88rem) / 2) + var(--pad));
+}
+
 @layer base {
   html {
-    scroll-behavior: smooth;
+    background: #06182b;
+    color-scheme: dark;
     scroll-padding-top: 5rem;
+    -webkit-text-size-adjust: 100%;
   }
+  /* NOTE: no background on <body>. The page colour lives on <html>; a body
+     background would paint ON TOP of the negative-z WebGL canvas and hide it. */
   body {
-    @apply bg-white text-navy-900 antialiased font-sans;
+    @apply font-sans text-foam antialiased;
+    font-stretch: 100%;
+    overflow-x: clip; /* `clip` (unlike `hidden`) keeps position: sticky working */
   }
+  ::selection {
+    background: #7de3d6;
+    color: #07101d;
+  }
+  :focus-visible {
+    outline: 2px solid #7de3d6;
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+  /* Slim scrollbar that matches the deep-sea palette */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: #06182b; }
+  ::-webkit-scrollbar-thumb { background: #1d3f5f; border-radius: 8px; }
+  ::-webkit-scrollbar-thumb:hover { background: #2a5a85; }
 }
 
+/* ── Typography ──────────────────────────────────────────────────────────── */
 @layer components {
-  .container-x {
-    @apply mx-auto w-full max-w-6xl px-5 sm:px-8;
+  /* Expanded all-caps display — the Noomo-style hero voice. */
+  .display {
+    font-stretch: 125%;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: -0.025em;
+    line-height: 0.95;
   }
+  /* Condensed heavy numerals — the Simply Chocolate voice. */
+  .condensed {
+    font-stretch: 62%;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: -0.01em;
+    line-height: 0.85;
+  }
+  /* Editorial serif italic accent (Beagle / Manus / Persepolis pairing). */
+  .serif-i {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-style: italic;
+    font-weight: 400;
+    text-transform: none;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .serif {
+    font-family: 'Instrument Serif', Georgia, serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+  .eyebrow {
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .num { font-variant-numeric: tabular-nums; }
+  .outline-text {
+    color: transparent;
+    -webkit-text-stroke: 1.2px rgba(244, 246, 251, 0.5);
+  }
+
+  .container-x {
+    @apply mx-auto w-full;
+    max-width: 88rem;
+    padding-inline: var(--pad);
+  }
+
+  /* ── Buttons ───────────────────────────────────────────────────────────── */
+  .btn {
+    @apply relative inline-flex items-center justify-center gap-2.5 overflow-hidden rounded-full px-7 py-3.5
+           text-[0.78rem] font-semibold uppercase tracking-[0.14em] transition-colors duration-300;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-primary { @apply bg-foam text-ink hover:bg-sun; }
+  .btn-aqua { @apply bg-aqua text-ink hover:bg-foam; }
+  /* Outline in the parent's text colour (Tailwind 3 has no `border-current/NN`). */
+  .btn-ghost { border: 1px solid color-mix(in srgb, currentColor 35%, transparent); }
+  .btn-ghost:hover { border-color: color-mix(in srgb, currentColor 85%, transparent); }
+  .border-cur { border-color: color-mix(in srgb, currentColor 40%, transparent); }
+  .btn svg { @apply transition-transform duration-300; }
+  .btn:hover svg.arrow { transform: translateX(4px); }
+
+  /* ── Glass panels (backdrop blur is dropped on low-tier devices) ───────── */
+  .glass {
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.03));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+    backdrop-filter: blur(16px) saturate(140%);
+  }
+  /* Backdrop blur over a canvas that animates every frame is re-computed every
+     frame — fine on desktop GPUs, costly on phones. Tiers 0 and 1 use a flat,
+     slightly more opaque panel instead (looks nearly identical on a dark sea). */
+  html[data-q='0'] .glass,
+  html[data-q='1'] .glass {
+    background: rgba(8, 22, 38, 0.8);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+
+  /* ── Form fields (dark) ────────────────────────────────────────────────── */
   .field-label {
-    @apply mb-1.5 block text-sm font-medium text-navy-800;
+    @apply mb-2 block text-[0.7rem] font-medium uppercase tracking-[0.16em] text-foam/60;
   }
   .field {
-    @apply w-full rounded-lg border border-slate-300 bg-white px-3.5 py-2.5 text-[15px] text-navy-900
-           placeholder:text-slate-400 transition-colors
-           focus:border-ocean focus:outline-none focus:ring-2 focus:ring-ocean/20;
+    @apply w-full rounded-xl border border-white/15 bg-white/[0.05] px-4 py-3 text-[15px] text-foam
+           placeholder:text-foam/30 transition-colors
+           focus:border-aqua focus:bg-white/[0.08] focus:outline-none;
+    color-scheme: dark;
   }
+  select.field option { background: #06182b; color: #f4f6fb; }
   .file-field {
-    @apply w-full rounded-lg border border-dashed border-slate-300 bg-slate-50 px-3.5 py-2.5 text-sm text-slate-500
-           transition-colors hover:border-ocean
-           file:mr-3 file:rounded-md file:border-0 file:bg-ocean/10 file:px-3 file:py-1.5
-           file:text-sm file:font-medium file:text-ocean hover:file:bg-ocean/20;
+    @apply w-full rounded-xl border border-dashed border-white/20 bg-white/[0.03] px-4 py-3 text-sm text-foam/60
+           transition-colors hover:border-aqua
+           file:mr-3 file:cursor-pointer file:rounded-full file:border-0 file:bg-foam file:px-4 file:py-1.5
+           file:text-xs file:font-semibold file:uppercase file:tracking-wider file:text-ink;
+    color-scheme: dark;
   }
 }
 
-/* Scroll-reveal — toggled by the Reveal component via IntersectionObserver */
+/* ── Reveal animations (class toggled by IntersectionObserver) ───────────── */
 .reveal {
   opacity: 0;
-  transform: translateY(var(--reveal-y, 28px));
-  transition:
-    opacity 0.7s ease,
-    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
-  will-change: opacity, transform;
+  transform: translate3d(0, var(--reveal-y, 32px), 0);
+  transition: opacity 0.9s var(--ease), transform 1s var(--ease);
 }
-.reveal.is-visible {
-  opacity: 1;
-  transform: none;
-}
+.reveal.is-visible { opacity: 1; transform: none; }
 
-/* Layered hero waves drifting sideways for a living ocean */
-.wave-layer {
-  position: absolute;
-  inset-inline: -5%;
-  bottom: 0;
-  width: 110%;
+/* Word-by-word mask reveal for headlines */
+.split .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: 0.12em; margin-bottom: -0.12em; }
+.split .wi {
+  display: inline-block;
+  transform: translate3d(0, 110%, 0);
+  transition: transform 1.1s var(--ease);
+  transition-delay: calc(var(--i, 0) * 55ms + var(--d, 0ms));
 }
-.wave-drift-slow { animation: wave-drift 14s ease-in-out infinite; }
-.wave-drift-fast { animation: wave-drift 9s ease-in-out infinite reverse; }
-@keyframes wave-drift {
-  0%, 100% { transform: translateX(0); }
-  50% { transform: translateX(-3%); }
-}
+.split.is-visible .wi { transform: none; }
 
-/* Floating bubbles rising through the hero */
-.bubble {
+/* ── Placeholder media tile (shown until real media is supplied) ─────────── */
+/* Positioning (relative vs absolute-fill) is set by <MediaSlot>, not here. */
+.ph {
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(135deg, rgba(125, 227, 214, 0.07) 0 1px, transparent 1px 14px),
+    linear-gradient(160deg, #0d3556 0%, #06182b 70%);
+  border: 1px solid rgba(125, 227, 214, 0.22);
+}
+.ph::before,
+.ph::after {
+  content: '';
   position: absolute;
-  bottom: -40px;
-  border-radius: 9999px;
-  background: radial-gradient(circle at 30% 30%, rgba(255, 255, 255, 0.45), rgba(201, 168, 76, 0.12));
-  animation: bubble-rise linear infinite;
+  width: 18px;
+  height: 18px;
+  border: 1px solid rgba(125, 227, 214, 0.6);
 }
-@keyframes bubble-rise {
-  0% { transform: translateY(0) scale(0.6); opacity: 0; }
-  10% { opacity: 0.7; }
-  90% { opacity: 0.5; }
-  100% { transform: translateY(-92vh) scale(1.1); opacity: 0; }
+.ph::before { top: 12px; left: 12px; border-right: 0; border-bottom: 0; }
+.ph::after { bottom: 12px; right: 12px; border-left: 0; border-top: 0; }
+
+/* ── Loader ring (Persepolis-style counter) ──────────────────────────────── */
+.ring-spin { animation: ring-spin 28s linear infinite; transform-origin: 50% 50%; }
+@keyframes ring-spin { to { transform: rotate(360deg); } }
+
+/* ── Misc ────────────────────────────────────────────────────────────────── */
+/* Fine film grain, a single cached tile (Persepolis texture). Off on low tier. */
+.grain {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  pointer-events: none;
+  opacity: 0.07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .6 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
 }
+html[data-q='0'] .grain { display: none; }
+
+.bob { animation: bob 2.4s ease-in-out infinite; }
+@keyframes bob { 50% { transform: translateY(6px); } }
+
+.no-scrollbar { scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Elements that move on every frame get their own compositor layer. */
+.gpu { will-change: transform; transform: translateZ(0); }
 
 @media (prefers-reduced-motion: reduce) {
   .reveal { opacity: 1; transform: none; transition: none; }
-  .wave-drift-slow, .wave-drift-fast, .bubble { animation: none; }
+  .split .wi { transform: none; transition: none; }
+  .ring-spin, .bob { animation: none; }
+  *, *::before, *::after { scroll-behavior: auto !important; }
 }
-
-/* Custom scrollbar */
-::-webkit-scrollbar { width: 10px; }
-::-webkit-scrollbar-track { background: #0a1628; }
-::-webkit-scrollbar-thumb { background: #1e4d8c; border-radius: 6px; }
-::-webkit-scrollbar-thumb:hover { background: #2a5fa3; }

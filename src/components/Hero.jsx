@@ -1,151 +1,133 @@
-import { ArrowRight, Ship, Globe2, BadgeCheck, Anchor } from 'lucide-react'
-import Wave from './Wave.jsx'
-import Parallax from './Parallax.jsx'
+import { useEffect, useMemo, useRef } from 'react'
+import { ArrowRight, ChevronDown } from 'lucide-react'
+import Split from './Split.jsx'
+import { onFrame, scrollToId } from '../lib/scroll.js'
+import { useCountdown } from '../lib/hooks.js'
+import { prefersReducedMotion } from '../lib/quality.js'
+import { nextIntake } from '../config/site.js'
 
-const stats = [
-  { value: '40+', label: 'Cruise lines & fleets' },
-  { value: '6', label: 'Onboard departments' },
-  { value: '12k+', label: 'Crew placed at sea' },
-]
+// HERO — a 200svh section with a sticky 100svh stage.
+// The extra 100svh of scroll is the "dive": the WebGL camera (three/backdrop.js)
+// tilts down and plunges through the surface while this copy lifts away and a
+// serif "Dive in." surfaces. Scroll progress comes from the shared store, and
+// only transform/opacity are written (compositor-only, no layout).
+const smooth = (a, b, v) => {
+  const t = Math.min(Math.max((v - a) / (b - a), 0), 1)
+  return t * t * (3 - 2 * t)
+}
 
-// A handful of rising bubbles with varied size / position / timing.
-const bubbles = [
-  { left: '8%', size: 14, delay: '0s', dur: '13s' },
-  { left: '20%', size: 8, delay: '4s', dur: '17s' },
-  { left: '34%', size: 20, delay: '2s', dur: '15s' },
-  { left: '52%', size: 10, delay: '6s', dur: '19s' },
-  { left: '67%', size: 16, delay: '1s', dur: '14s' },
-  { left: '81%', size: 9, delay: '5s', dur: '18s' },
-  { left: '92%', size: 13, delay: '3s', dur: '16s' },
-]
-
-export default function Hero() {
+function Countdown({ cd }) {
+  const cells = [['d', 'Days'], ['h', 'Hrs'], ['m', 'Min'], ['s', 'Sec']]
   return (
-    <section id="home" className="relative isolate overflow-hidden bg-navy-900">
-      {/* Background gradient + parallax glows ------------------------------- */}
-      <div className="absolute inset-0 -z-30 bg-gradient-to-b from-navy-900 via-navy-800 to-ocean-600/40" />
-
-      <Parallax speed={0.35} className="absolute inset-0 -z-20">
-        <div className="absolute -right-32 -top-32 h-96 w-96 rounded-full bg-ocean/30 blur-3xl animate-float-slow" />
-      </Parallax>
-      <Parallax speed={0.55} className="absolute inset-0 -z-20">
-        <div className="absolute left-1/4 top-1/3 h-72 w-72 rounded-full bg-gold/10 blur-3xl animate-float" />
-      </Parallax>
-
-      {/* Faint horizon grid — drifts slowly as you scroll */}
-      <Parallax speed={0.15} className="absolute inset-0 -z-20">
-        <div
-          className="absolute inset-0 opacity-[0.06]"
-          style={{
-            backgroundImage:
-              'linear-gradient(transparent 95%, #ffffff 95%), linear-gradient(90deg, transparent 95%, #ffffff 95%)',
-            backgroundSize: '60px 60px',
-          }}
-        />
-      </Parallax>
-
-      {/* Drifting anchor watermark deep in the background */}
-      <Parallax speed={0.7} className="pointer-events-none absolute -z-20 right-[8%] top-24 hidden lg:block">
-        <Anchor className="h-40 w-40 text-white/[0.04] animate-float-slow" strokeWidth={1.2} />
-      </Parallax>
-
-      {/* Rising bubbles */}
-      <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden" aria-hidden="true">
-        {bubbles.map((b, i) => (
-          <span
-            key={i}
-            className="bubble"
-            style={{
-              left: b.left,
-              width: b.size,
-              height: b.size,
-              animationDelay: b.delay,
-              animationDuration: b.dur,
-            }}
-          />
+    <div>
+      <p className="eyebrow mb-2.5 text-foam/80">Next crew intake closes in</p>
+      <div className="inline-flex divide-x divide-foam/25 rounded-xl border border-foam/30 bg-abyss/25 backdrop-blur-sm" role="timer" aria-label="Time until the next intake closes">
+        {cells.map(([k, label]) => (
+          <div key={k} className="min-w-[3.6rem] px-3 py-2 text-center sm:min-w-[4.4rem] sm:px-4">
+            <span className="condensed num block text-[2rem] leading-none sm:text-[2.7rem]">{String(cd[k]).padStart(2, '0')}</span>
+            <span className="eyebrow mt-1 block text-[0.58rem] text-foam/70">{label}</span>
+          </div>
         ))}
       </div>
+    </div>
+  )
+}
 
-      <div className="container-x flex flex-col items-start gap-10 pb-32 pt-32 sm:pt-40 lg:flex-row lg:items-center lg:gap-16 lg:pb-40">
-        {/* Foreground copy — drifts up slightly faster than the background */}
-        <Parallax speed={-0.06} className="max-w-2xl">
-          <div className="animate-fade-up">
-            <span className="inline-flex items-center gap-2 rounded-full border border-gold/30 bg-white/5 px-4 py-1.5 text-xs font-medium uppercase tracking-wider text-gold backdrop-blur">
-              <Ship className="h-4 w-4" />
-              Maritime & Cruise Recruitment
-            </span>
+export default function Hero({ ready }) {
+  const head = useRef(null)
+  const low = useRef(null)
+  const shade = useRef(null)
+  const cap = useRef(null)
+  const cd = useCountdown(useMemo(() => nextIntake(), []))
 
-            <h1 className="mt-6 text-4xl font-extrabold leading-[1.08] tracking-tight text-white sm:text-5xl lg:text-6xl">
-              Your Career at Sea
-              <span className="block bg-gradient-to-r from-gold via-gold-400 to-gold bg-clip-text text-transparent">
-                Starts Here
-              </span>
-            </h1>
+  useEffect(() => {
+    if (prefersReducedMotion()) return
+    let key = ''
+    return onFrame((s) => {
+      const p = s.heroP
+      const k = p.toFixed(3)
+      if (k === key) return
+      key = k
+      if (head.current) {
+        head.current.style.transform = `translate3d(0,${(-p * 24).toFixed(2)}vh,0) scale(${(1 + p * 0.14).toFixed(3)})`
+        head.current.style.opacity = String(1 - smooth(0.1, 0.48, p))
+      }
+      if (low.current) {
+        low.current.style.transform = `translate3d(0,${(-p * 10).toFixed(2)}vh,0)`
+        low.current.style.opacity = String(1 - smooth(0.04, 0.3, p))
+      }
+      if (shade.current) shade.current.style.opacity = String(1 - smooth(0.04, 0.35, p))
+      if (cap.current) cap.current.style.opacity = String(smooth(0.5, 0.68, p) * (1 - smooth(0.88, 1, p)))
+    })
+  }, [])
 
-            <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
-              OceanHire connects skilled professionals with leading cruise lines and
-              shipping companies worldwide. From deck to dining, we help you find a
-              role that takes your career across the horizon.
-            </p>
+  const go = (id) => (e) => {
+    e.preventDefault()
+    scrollToId(id)
+  }
 
-            <div className="mt-9 flex flex-col gap-3 sm:flex-row sm:items-center">
-              <a
-                href="#apply"
-                className="group inline-flex items-center justify-center gap-2 rounded-full bg-gold px-7 py-3.5 text-base font-semibold text-navy-900 shadow-lg shadow-gold/20 transition-all hover:bg-gold-400 hover:shadow-gold/30"
-              >
-                Apply Now
-                <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
-              </a>
-              <a
-                href="#departments"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/5 px-7 py-3.5 text-base font-semibold text-white backdrop-blur transition-colors hover:bg-white/10"
-              >
-                Explore Departments
-              </a>
-            </div>
-
-            <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-400">
-              <span className="inline-flex items-center gap-1.5">
-                <BadgeCheck className="h-4 w-4 text-gold" /> MLC-compliant placements
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <Globe2 className="h-4 w-4 text-gold" /> 60+ nationalities onboard
-              </span>
-            </div>
-          </div>
-        </Parallax>
-
-        {/* Stat panel — floats with a gentler parallax for depth */}
-        <Parallax speed={0.12} className="w-full max-w-sm lg:ml-auto">
-          <div
-            className="animate-fade-up rounded-2xl border border-white/10 bg-white/5 p-6 shadow-soft backdrop-blur-md sm:p-8"
-            style={{ animationDelay: '120ms' }}
+  return (
+    <section id="home" className="relative h-[200svh] motion-reduce:h-[100svh]">
+      <div className="sticky top-0 h-[100svh] overflow-hidden">
+        {/* Soft shade so the light copy stays readable over the sun-glitter on the water */}
+        <div
+          ref={shade}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-x-0 bottom-0 h-[66%] bg-gradient-to-t from-abyss/85 via-abyss/45 to-transparent sm:h-[48%] sm:from-abyss/70 sm:via-abyss/25"
+        />
+        <div className="container-x relative flex h-full flex-col justify-between pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-24 sm:pt-28">
+          {/* Headline — wide caps with a serif-italic accent (Noomo + Beagle pairing) */}
+          <h1
+            ref={head}
+            className="display gpu text-ink"
+            style={{ fontSize: 'clamp(2.4rem, 8.4vw, 8.2rem)', transformOrigin: '30% 60%' }}
           >
-            <p className="text-sm font-medium uppercase tracking-wider text-gold">
-              Trusted by crew worldwide
-            </p>
-            <div className="mt-6 space-y-6">
-              {stats.map((s) => (
-                <div key={s.label} className="flex items-baseline gap-4 border-b border-white/10 pb-5 last:border-0 last:pb-0">
-                  <span className="text-4xl font-extrabold text-white">{s.value}</span>
-                  <span className="text-sm text-slate-300">{s.label}</span>
-                </div>
-              ))}
+            <Split className="block" text="Your career" start={ready} />
+            <span className="block text-right sm:pr-[7vw]" style={{ fontSize: '1.22em', lineHeight: 0.9 }}>
+              <Split text={[{ t: 'at', c: 'serif-i' }, { t: 'sea', c: 'serif-i' }]} start={ready} delay={140} />
+            </span>
+            <Split className="block" text="starts here" start={ready} delay={280} />
+          </h1>
+
+          <div
+            ref={low}
+            className={`gpu grid items-end gap-6 text-foam transition-opacity duration-1000 [text-shadow:0_1px_20px_rgba(4,16,32,0.55)] md:grid-cols-12 ${
+              ready ? 'opacity-100' : 'opacity-0'
+            }`}
+          >
+            <div className="order-2 md:order-1 md:col-span-4">
+              <Countdown cd={cd} />
+            </div>
+
+            <div className="order-3 hidden justify-center md:order-2 md:col-span-3 md:flex">
+              <button type="button" onClick={go('about')} className="group flex flex-col items-center gap-3" aria-label="Scroll down">
+                <span className="eyebrow text-foam/80">Scroll</span>
+                <span className="bob grid h-12 w-12 place-items-center rounded-full border border-foam/50 transition-colors group-hover:bg-foam group-hover:text-ink">
+                  <ChevronDown className="h-5 w-5" />
+                </span>
+              </button>
+            </div>
+
+            <div className="order-1 md:order-3 md:col-span-5 md:max-w-md md:justify-self-end">
+              <p className="text-[0.95rem] leading-relaxed text-foam/90 sm:text-base">
+                OceanHire connects skilled professionals with leading cruise lines and shipping companies worldwide. From deck to
+                dining, we help you find a role that takes your career across the horizon.
+              </p>
+              <div className="mt-5 flex flex-wrap items-center gap-3 [text-shadow:none]">
+                <a href="#apply" onClick={go('apply')} className="btn btn-primary">
+                  Apply now <ArrowRight className="arrow h-4 w-4" />
+                </a>
+                <a href="#departments" onClick={go('departments')} className="btn btn-ghost">
+                  Explore departments
+                </a>
+              </div>
             </div>
           </div>
-        </Parallax>
-      </div>
+        </div>
 
-      {/* Layered, drifting wave divider for a sense of motion at the shoreline */}
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 sm:h-20">
-        <div className="wave-layer wave-drift-slow opacity-30">
-          <Wave className="text-white" />
-        </div>
-        <div className="wave-layer wave-drift-fast opacity-50">
-          <Wave className="text-slate-100" />
-        </div>
-        <div className="wave-layer">
-          <Wave className="text-white" />
+        {/* Surfaces mid-dive */}
+        <div ref={cap} aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0">
+          <span className="serif-i text-[clamp(3.4rem,14vw,11rem)] text-foam">Dive in.</span>
         </div>
       </div>
     </section>
