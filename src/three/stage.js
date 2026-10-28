@@ -57,7 +57,8 @@ export function disposeObject(root) {
  *   heavy  counts toward perf.heavy while visible (interactive sections)
  *   fov    vertical field of view
  *   name   label used by the ?debug overlay
- *   build  ({renderer, scene, camera, budget, tier}) => { update(dt,t,s), resize(w,h,aspect), dispose() }
+ *   build  ({renderer, scene, camera, budget, tier}) => { update(dt,t,s), resize(w,h,aspect), dispose(),
+ *            optional render(dt) → true if it drew the frame, optional quality(scale,w,h) }
  */
 export function createStage(container, { tier, fixed = false, heavy = false, fov = 50, build, onFirstFrame, name = 'scene' }) {
   const budget = BUDGET[tier]
@@ -97,6 +98,7 @@ export function createStage(container, { tier, fixed = false, heavy = false, fov
     onScale: (s) => {
       renderer.setPixelRatio(basePR * s)
       renderer.setSize(w, h, false)
+      api.quality?.(s, w, h) // lets a scene drop expensive effects (post-processing) first
     },
   })
 
@@ -144,7 +146,8 @@ export function createStage(container, { tier, fixed = false, heavy = false, fov
     const d = acc
     acc = 0
     api.update(Math.min(d, 64) / 1000, time / 1000, s)
-    renderer.render(scene, camera)
+    // A scene may take over rendering (post-processing); otherwise draw directly.
+    if (!api.render?.(Math.min(d, 64) / 1000)) renderer.render(scene, camera)
     governor.tick(d)
     if (DEBUG) {
       fpsEma += (1000 / d - fpsEma) * 0.1

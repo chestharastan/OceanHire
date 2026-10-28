@@ -121,8 +121,8 @@ function build({ scene, camera, budget }) {
   env.uSunDir.value.set(-0.5, 0.22, -0.8).normalize()
   env.uFogDensity.value = 0.0036
   scene.fog = new FogExp2(palette.horizon, 0.0036)
-  scene.add(createSky(env))
-  const ocean = createOcean(env, { radius: 330, rings: budget.oceanRings, seg: budget.oceanSeg })
+  scene.add(createSky(env, { cloudOct: budget.cloudOct, lit: budget.cloudLit }))
+  const ocean = createOcean(env, { radius: 330, rings: budget.oceanRings, seg: budget.oceanSeg, detail: budget.oceanDetail, reflOct: budget.reflOct })
   scene.add(ocean)
 
   const sun = new DirectionalLight('#ffd9a8', 2.6)

@@ -34,10 +34,18 @@ export function detectTier() {
 }
 
 // Per-tier budgets. Scenes pick what they need.
+//   cloudOct / cloudLit  sky cloud FBM octaves and sun-side shading + cirrus
+//   oceanDetail / reflOct  micro-detail normal octaves; clouds reflected in the water
+//   glass   'transmission' = real refraction (desktop) · 'basic' = cheap clearcoat (phones)
+//   post    bloom + highlight roll-off + vignette (desktop only; the governor can switch it off)
+//   bokeh   soft out-of-focus light motes in the hero
 export const BUDGET = {
-  0: { dpr: 1, fps: 30, oceanRings: 36, oceanSeg: 64, snow: 160, jellies: 1, tentacles: 8, msaa: false, grain: false },
-  1: { dpr: 1.5, fps: 60, oceanRings: 52, oceanSeg: 96, snow: 360, jellies: 3, tentacles: 12, msaa: true, grain: true },
-  2: { dpr: 2, fps: 60, oceanRings: 72, oceanSeg: 160, snow: 700, jellies: 4, tentacles: 16, msaa: true, grain: true },
+  0: { dpr: 1, fps: 30, oceanRings: 36, oceanSeg: 64, snow: 160, jellies: 1, tentacles: 8, msaa: false, grain: false,
+       cloudOct: 2, cloudLit: false, oceanDetail: 1, reflOct: 1, glass: 'basic', post: false, bokeh: 0 },
+  1: { dpr: 1.5, fps: 60, oceanRings: 52, oceanSeg: 96, snow: 360, jellies: 3, tentacles: 12, msaa: true, grain: true,
+       cloudOct: 3, cloudLit: false, oceanDetail: 2, reflOct: 2, glass: 'basic', post: false, bokeh: 14 },
+  2: { dpr: 2, fps: 60, oceanRings: 72, oceanSeg: 160, snow: 700, jellies: 4, tentacles: 16, msaa: true, grain: true,
+       cloudOct: 5, cloudLit: true, oceanDetail: 3, reflOct: 3, glass: 'transmission', post: true, bokeh: 22 },
 }
 
 /**

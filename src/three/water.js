@@ -1,14 +1,19 @@
 // Shared ocean + sky. Used by the hero backdrop and the sailable map.
 //
-// OCEAN — four summed Gerstner waves displaced in the vertex shader (analytic
-// normals, no textures). The fragment shader blends a body colour with a
-// reflection of the procedural sky by Fresnel, adds a sun glint and crest foam,
-// and looks different from below the surface (a bright "Snell's window").
-// The mesh is a polar grid: dense rings near the camera where detail matters,
-// sparse far away, so ~10k vertices give a convincing horizon.
+// SKY — a gradient dome with lit, drifting FBM clouds, thin cirrus and an HDR sun
+// disc (values > 1, so the desktop bloom pass makes it glow). The dome is drawn
+// LAST with its depth pushed to the far plane, so the fragment shader only runs on
+// pixels the ocean/objects did not already cover (early-z), instead of the whole
+// screen. A single `uSub` uniform cross-fades it into the underwater column.
 //
-// SKY — a gradient dome that follows the camera. A single `uSub` uniform
-// cross-fades it into the underwater water-column gradient when diving.
+// OCEAN — four summed Gerstner waves in the vertex shader (analytic normals) plus
+// scrolling gradient-noise micro-detail in the fragment shader. The fragment
+// blends a body colour with a Fresnel reflection of the SAME sky (clouds included),
+// adds backlit-crest translucency, noise-driven foam and a sun glitter path, and
+// looks different from below the surface (Snell's window).
+//
+// Quality is a build-time option (noise octaves are compile-time constants), so
+// phones get a leaner shader than desktops — see BUDGET in lib/quality.js.
 import {
   BufferGeometry,
   BufferAttribute,
@@ -49,15 +54,18 @@ export function createEnv(palette = {}) {
   const c = (hex) => new Color(hex)
   return {
     uTime: { value: 0 },
-    uSunDir: { value: new Vector3(-0.35, 0.3, -0.88).normalize() },
+    uSunDir: { value: new Vector3(-0.24, 0.3, -0.92).normalize() },
     uSunCol: { value: c(palette.sun ?? '#ffd9a8') },
-    uHorizon: { value: c(palette.horizon ?? '#f6e4dc') },
-    uZenith: { value: c(palette.zenith ?? '#aebfe3') },
+    uHorizon: { value: c(palette.horizon ?? '#f4d9cc') },
+    uZenith: { value: c(palette.zenith ?? '#8ea6d8') },
+    uCloudLit: { value: c(palette.cloudLit ?? '#fff1e8') },
+    uCloudShadow: { value: c(palette.cloudShadow ?? '#8791c0') },
     uDeep: { value: c(palette.deep ?? '#1f4f7a') },
     uShallow: { value: c(palette.shallow ?? '#4f9bb8') },
-    uFogColor: { value: c(palette.horizon ?? '#f6e4dc') },
+    uFogColor: { value: c(palette.horizon ?? '#f4d9cc') },
     uFogDensity: { value: 0.0042 },
     uSub: { value: 0 },
+    uBelow: { value: 0 }, // 1 only while baking the reflection environment: below the horizon = sea
     uDeepTop: { value: c('#2f8fb5') },
     uDeepBottom: { value: c('#0d4a73') },
     uShaft: { value: c('#9fe8e0') },
@@ -74,39 +82,116 @@ export const GLSL_COMMON = /* glsl */ `
   }
 `
 
-const SKY_FN = /* glsl */ `
-  uniform vec3 uHorizon, uZenith, uSunCol, uSunDir;
-  vec3 skyCol(vec3 d){
-    float h = max(d.y, 0.0);
-    vec3 c = mix(uHorizon, uZenith, pow(h, 0.5));
-    float s = max(dot(d, uSunDir), 0.0);
-    c += uSunCol * (pow(s, 12.0) * 0.25 + pow(s, 220.0) * 1.2);
-    return c;
+// Value noise WITH analytic derivatives (Inigo Quilez): .x = value, .yz = gradient.
+// The gradient is what gives the water its fine, correctly-lit surface detail.
+const GLSL_NOISE = /* glsl */ `
+  vec3 noised(vec2 x){
+    vec2 p = floor(x);
+    vec2 w = fract(x);
+    vec2 u = w * w * w * (w * (w * 6.0 - 15.0) + 10.0);
+    vec2 du = 30.0 * w * w * (w * (w - 2.0) + 1.0);
+    float a = hash12(p);
+    float b = hash12(p + vec2(1.0, 0.0));
+    float c = hash12(p + vec2(0.0, 1.0));
+    float d = hash12(p + vec2(1.0, 1.0));
+    float k1 = b - a;
+    float k2 = c - a;
+    float k4 = a - b - c + d;
+    return vec3(a + k1 * u.x + k2 * u.y + k4 * u.x * u.y, du * vec2(k1 + k4 * u.y, k2 + k4 * u.x));
   }
 `
 
-export function createSky(env) {
+// Sky colour model shared by the dome and the ocean's reflection.
+// Needs CLOUD_OCT (octave count); defining CLOUD_LIT adds sun-side shading + cirrus.
+const SKY_CORE = /* glsl */ `
+  uniform vec3 uHorizon, uZenith, uSunCol, uSunDir, uCloudLit, uCloudShadow;
+  uniform float uTime;
+
+  float fbm(vec2 p){
+    float s = 0.0;
+    float a = 0.5;
+    for (int i = 0; i < CLOUD_OCT; i++) {
+      s += a * noised(p).x;
+      p = mat2(1.6, 1.2, -1.2, 1.6) * p;
+      a *= 0.5;
+    }
+    return s;
+  }
+
+  vec3 skyBase(vec3 d){
+    float h = max(d.y, 0.0);
+    vec3 c = mix(uHorizon, uZenith, pow(h, 0.45));
+    float s = max(dot(d, uSunDir), 0.0);
+    c += uSunCol * (pow(s, 8.0) * 0.10 + pow(s, 64.0) * 0.22);   // soft sun-side glow
+    return c;
+  }
+
+  // returns vec4(colour, coverage)
+  vec4 applyClouds(vec3 col, vec3 d){
+    float up = d.y;
+    if (up < 0.012) return vec4(col, 0.0);
+    // project onto a plane: clouds shrink toward the horizon like real perspective
+    vec2 p = d.xz / (up + 0.16) * 1.35 + vec2(uTime * 0.0045, uTime * 0.0016);
+    float n = fbm(p);
+    float cov = smoothstep(0.50, 0.80, n) * smoothstep(0.012, 0.20, up);
+    #ifdef CLOUD_LIT
+      float n2 = fbm(p + uSunDir.xz * 0.32);
+      float lit = clamp(0.58 + (n - n2) * 3.6, 0.0, 1.0);
+    #else
+      float lit = 0.62;
+    #endif
+    vec3 cc = mix(uCloudShadow, uCloudLit, lit);
+    cc += uSunCol * pow(max(dot(d, uSunDir), 0.0), 5.0) * 0.5;      // sun-lit rims
+    col = mix(col, cc, cov * 0.92);
+    #ifdef CLOUD_LIT
+      // thin stretched cirrus streaks high up
+      float ci = fbm(vec2(p.x * 0.3 + 3.1, p.y * 1.9));
+      col = mix(col, uCloudLit, smoothstep(0.55, 0.92, ci) * 0.20 * smoothstep(0.1, 0.5, up));
+    #endif
+    return vec4(col, cov);
+  }
+`
+
+/**
+ * @param opts.cloudOct  FBM octaves for clouds (2 phone … 5 desktop)
+ * @param opts.lit       sun-side cloud shading + cirrus (desktop)
+ */
+export function createSky(env, { cloudOct = 3, lit = false } = {}) {
   const mat = new ShaderMaterial({
     uniforms: env,
     side: BackSide,
     depthWrite: false,
-    depthTest: false,
+    depthTest: true,
     vertexShader: /* glsl */ `
       varying vec3 vDir;
       void main(){
         vDir = position;
-        // The dome is re-centred on the camera in the shader, so the mesh never moves.
-        gl_Position = projectionMatrix * viewMatrix * vec4(position * 900.0 + cameraPosition, 1.0);
+        // Re-centre the dome on the camera in the shader, then push it to the far plane so
+        // depth testing skips every pixel the ocean or an object already covered.
+        vec4 clip = projectionMatrix * viewMatrix * vec4(position * 900.0 + cameraPosition, 1.0);
+        clip.z = clip.w * 0.99999;
+        gl_Position = clip;
       }`,
     fragmentShader: /* glsl */ `
+      #define CLOUD_OCT ${cloudOct}
+      ${lit ? '#define CLOUD_LIT' : ''}
       ${GLSL_COMMON}
-      ${SKY_FN}
-      uniform vec3 uDeepTop, uDeepBottom, uShaft;
-      uniform float uSub, uShaftAmt;
+      ${GLSL_NOISE}
+      ${SKY_CORE}
+      uniform vec3 uDeepTop, uDeepBottom, uShaft, uDeep;
+      uniform float uSub, uShaftAmt, uBelow;
       varying vec3 vDir;
       void main(){
         vec3 d = normalize(vDir);
-        vec3 above = skyCol(d);
+        vec3 above = skyBase(d);
+        if (uBelow > 0.0) above = mix(above, uDeep * 1.15, smoothstep(0.0, -0.3, d.y) * uBelow);
+        vec4 cl = applyClouds(above, d);
+        above = cl.rgb;
+        // HDR sun disc (>1): the desktop bloom pass turns this into a real glow
+        float sd = max(dot(d, uSunDir), 0.0);
+        // …wrapped in a soft halo so the sun reads as a light source even where there is no bloom (phones)
+        above += uSunCol * (smoothstep(0.99930, 0.99978, sd) * 9.0 + pow(sd, 900.0) * 0.9 + pow(sd, 160.0) * 0.18) * (1.0 - cl.a * 0.9);
+
         float g = smoothstep(-0.55, 0.85, d.y);
         vec3 below = mix(uDeepBottom, uDeepTop, g);
         below += uShaft * pow(max(d.y, 0.0), 5.0) * uShaftAmt;
@@ -118,7 +203,7 @@ export function createSky(env) {
   })
   const mesh = new Mesh(new SphereGeometry(1, 24, 12), mat)
   mesh.frustumCulled = false
-  mesh.renderOrder = -10
+  mesh.renderOrder = 100 // after everything opaque, so early-z can reject covered pixels
   return mesh
 }
 
@@ -154,7 +239,11 @@ export function createOceanGeometry(radius, rings, seg) {
   return g
 }
 
-export function createOcean(env, { radius = 420, rings = 72, seg = 160 } = {}) {
+/**
+ * @param opts.detail  octaves of micro-detail normal noise (1 phone … 3 desktop)
+ * @param opts.reflOct octaves of the clouds reflected in the water
+ */
+export function createOcean(env, { radius = 420, rings = 72, seg = 160, detail = 2, reflOct = 2 } = {}) {
   const mat = new ShaderMaterial({
     uniforms: env,
     side: DoubleSide,
@@ -195,10 +284,13 @@ export function createOcean(env, { radius = 420, rings = 72, seg = 160 } = {}) {
         gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
       }`,
     fragmentShader: /* glsl */ `
+      #define DETAIL_OCT ${detail}
+      #define CLOUD_OCT ${reflOct}
       ${GLSL_COMMON}
-      ${SKY_FN}
+      ${GLSL_NOISE}
+      ${SKY_CORE}
       uniform vec3 uDeep, uShallow, uFogColor;
-      uniform float uFogDensity, uTime;
+      uniform float uFogDensity;
       varying vec3 vWorld;
       varying vec3 vN;
       void main(){
@@ -207,24 +299,49 @@ export function createOcean(env, { radius = 420, rings = 72, seg = 160 } = {}) {
         bool under = !gl_FrontFacing;
         if (under) N = -N;
         vec2 q = vWorld.xz;
-        // cheap ripple detail layered on the analytic normal
         float dist = distance(cameraPosition, vWorld);
-        float rip = 1.0 - smoothstep(15.0, 80.0, dist);   // fade ripples with distance → no moiré at the horizon
-        N = normalize(N + rip * vec3(
-          sin(q.x * 1.9 + uTime * 1.3) * 0.045 + sin(q.y * 3.1 - uTime * 1.7) * 0.025, 0.0,
-          cos(q.y * 2.3 + uTime * 1.1) * 0.045 + cos(q.x * 3.7 + uTime * 1.9) * 0.025));
+
+        // ── micro-detail: scrolling gradient-noise normals, faded with distance (no moiré) ──
+        float detailFade = 1.0 - smoothstep(22.0, 190.0, dist);
+        vec2 g = vec2(0.0);
+        float amp = 0.6;
+        float fr = 0.85;
+        for (int i = 0; i < DETAIL_OCT; i++) {
+          vec2 flow = vec2(uTime * (0.10 + 0.07 * float(i)), -uTime * (0.06 + 0.03 * float(i)));
+          g += noised(q * fr + flow).yz * amp;
+          amp *= 0.5;
+          fr *= 2.15;
+        }
+        N = normalize(N + vec3(g.x, 0.0, g.y) * 0.20 * detailFade);
+
         vec3 col;
         if (!under) {
           float ndv = max(dot(N, V), 0.0);
           float fres = 0.02 + 0.98 * pow(1.0 - ndv, 5.0);
           vec3 R = reflect(-V, N);
           R.y = abs(R.y);
-          vec3 body = mix(uDeep, uShallow, clamp(0.35 + vWorld.y * 0.5, 0.0, 1.0) * (0.5 + 0.5 * ndv));
-          col = mix(body, skyCol(R), fres);
-          col += uSunCol * pow(max(dot(R, uSunDir), 0.0), 300.0) * 2.5;
-          // Soft crest foam, faded out with distance so it never turns into far-field speckle.
-          float crest = smoothstep(0.50, 0.86, vWorld.y) * (0.65 + 0.35 * sin(q.x * 1.3 + q.y * 0.9 + uTime * 0.8));
-          col = mix(col, vec3(0.97, 0.98, 1.0), crest * 0.5 * (1.0 - smoothstep(10.0, 60.0, dist)));
+          vec3 refl = applyClouds(skyBase(R), R).rgb;
+
+          // body colour: darker in troughs, lighter / greener toward crests
+          float crest = clamp(vWorld.y * 0.85 + 0.45, 0.0, 1.0);
+          vec3 body = mix(uDeep, uShallow, crest * 0.65 + 0.12 * ndv);
+
+          // translucency: crests glow turquoise when we look toward the sun through them
+          vec3 Ls = normalize(vec3(uSunDir.x, 0.0, uSunDir.z));
+          vec3 Vh = normalize(vec3(-V.x, 0.0, -V.z));
+          float back = pow(clamp(dot(Vh, Ls), 0.0, 1.0), 3.0);
+          body += vec3(0.07, 0.42, 0.40) * back * smoothstep(0.10, 0.75, vWorld.y) * (1.0 - fres) * 1.1;
+
+          col = mix(body, refl, fres);
+
+          // sun glitter: a sharp core + a broad sheen; the micro normals make it sparkle
+          float sp = max(dot(R, uSunDir), 0.0);
+          col += uSunCol * (pow(sp, 420.0) * 3.6 + pow(sp, 70.0) * 0.30);
+
+          // foam: noise-broken crest lines that fade with distance
+          float fn = noised(q * 1.35 + vec2(uTime * 0.12, 0.0)).x;
+          float foam = smoothstep(0.50, 0.80, vWorld.y + (fn - 0.5) * 0.5) * (1.0 - smoothstep(12.0, 75.0, dist));
+          col = mix(col, vec3(0.97, 0.98, 1.0), foam * 0.55);
         } else {
           float look = clamp(-V.y, 0.0, 1.0);          // 1 = looking straight up at the surface
           vec3 window = mix(uShallow, uHorizon, 0.5) * 1.25;

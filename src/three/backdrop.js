@@ -1,16 +1,22 @@
 // HERO BACKDROP — one fixed, full-screen WebGL scene behind the whole page.
 //
 //   scroll 0 ─────────────► hero end ─────────────────────────────► page end
-//   pastel dawn sky + ocean   camera tilts down & DIVES    keeps sinking into the abyss
-//   glass anchor / helm /     through the surface           bioluminescent jellyfish,
-//   compass floating above                                  marine snow, light shafts
+//   dawn sky (lit clouds)     camera tilts down & DIVES    keeps sinking into the abyss
+//   + detailed ocean          through the surface           bioluminescent jellyfish,
+//   brass/glass helm, anchor,                               marine snow, light shafts
+//   a cruise liner on the horizon
 //
 // Everything is driven by `scroll.heroP` (the dive) and `scroll.depth` (page
 // progress) from the shared scroll store, so the 3D world and the DOM stay in
-// lock-step. Visual references: Noomo (frosted pearly 3D forms on a pastel
+// lock-step. Visual references: Noomo (refractive glass forms on a pastel
 // gradient, a jellyfish), Igloo (soft light + drifting particles).
+//
+// Premium finish: the glass and brass reflect an environment BAKED FROM THE SAME SKY
+// shader (so highlights match the real clouds and sun); on desktop a bloom + highlight
+// roll-off + vignette pass adds a filmic look, and glass really refracts the scene.
 import {
   Group,
+  Scene,
   Mesh,
   Points,
   LineSegments,
@@ -20,23 +26,21 @@ import {
   ShaderMaterial,
   PlaneGeometry,
   SphereGeometry,
-  CylinderGeometry,
-  TorusGeometry,
-  ConeGeometry,
-  ExtrudeGeometry,
-  Shape,
-  MeshPhysicalMaterial,
   DirectionalLight,
   HemisphereLight,
   PMREMGenerator,
+  FogExp2,
   Color,
   Vector3,
   AdditiveBlending,
   DoubleSide,
+  NoToneMapping,
+  ACESFilmicToneMapping,
 } from 'three'
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { createEnv, createSky, createOcean } from './water.js'
+import { createEnv, createSky, createOcean, waveHeight } from './water.js'
+import { makeMaterials, createHelm, createAnchor } from './hero-objects.js'
+import { createCruiseShip } from './ship.js'
+import { createPost } from './post.js'
 
 const TAU = Math.PI * 2
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v)
@@ -85,68 +89,6 @@ function underwater(D, outTop, outBot) {
   const k = clamp01((D - d0) / (d1 - d0))
   outTop.copy(t0).lerp(t1, k)
   outBot.copy(b0).lerp(b1, k)
-}
-
-// ── Glass hero pieces ───────────────────────────────────────────────────────
-function buildAnchor() {
-  const parts = []
-  parts.push(new CylinderGeometry(0.09, 0.09, 2.6, 18))
-  const stock = new CylinderGeometry(0.075, 0.075, 1.3, 14)
-  stock.rotateZ(Math.PI / 2)
-  stock.translate(0, 0.75, 0)
-  parts.push(stock)
-  const ring = new TorusGeometry(0.24, 0.06, 12, 28)
-  ring.translate(0, 1.55, 0)
-  parts.push(ring)
-  const arms = new TorusGeometry(0.95, 0.095, 14, 44, Math.PI)
-  arms.rotateZ(Math.PI)
-  arms.translate(0, -0.35, 0)
-  parts.push(arms)
-  for (const sx of [-1, 1]) {
-    const fluke = new ConeGeometry(0.26, 0.62, 5)
-    fluke.rotateZ(-sx * 0.55)
-    fluke.translate(sx * 0.98, -0.2, 0)
-    parts.push(fluke)
-  }
-  const g = mergeGeometries(parts)
-  parts.forEach((p) => p.dispose())
-  return g
-}
-
-function buildHelm() {
-  const parts = [new TorusGeometry(1.0, 0.085, 16, 64)]
-  parts.push(new SphereGeometry(0.22, 20, 14))
-  for (let i = 0; i < 4; i++) {
-    const spoke = new CylinderGeometry(0.04, 0.04, 2.5, 10)
-    spoke.rotateZ((i * Math.PI) / 4)
-    parts.push(spoke)
-  }
-  for (let i = 0; i < 8; i++) {
-    const handle = new CylinderGeometry(0.055, 0.045, 0.55, 10)
-    handle.translate(0, 1.28, 0)
-    handle.rotateZ((i * TAU) / 8)
-    parts.push(handle)
-  }
-  const g = mergeGeometries(parts)
-  parts.forEach((p) => p.dispose())
-  return g
-}
-
-function buildStar() {
-  const s = new Shape()
-  const pts = 8
-  for (let i = 0; i < pts * 2; i++) {
-    const a = (i / (pts * 2)) * TAU - Math.PI / 2
-    const major = i % 4 === 0
-    const r = i % 2 === 1 ? 0.3 : major ? 1.35 : 0.85
-    const x = Math.cos(a) * r
-    const y = Math.sin(a) * r
-    i === 0 ? s.moveTo(x, y) : s.lineTo(x, y)
-  }
-  s.closePath()
-  const g = new ExtrudeGeometry(s, { depth: 0.22, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.04, bevelSegments: 2 })
-  g.center()
-  return g
 }
 
 // ── Jellyfish ───────────────────────────────────────────────────────────────
@@ -339,48 +281,109 @@ function createShafts(env, count) {
   return group
 }
 
+
+// ── Bokeh motes ─────────────────────────────────────────────────────────────
+// Soft out-of-focus discs drifting in the hero light — the cue that this was "shot",
+// not rendered flat. Additive, no depth write, a single Points draw call.
+function createBokeh(env, count) {
+  const pos = new Float32Array(count * 3)
+  const size = new Float32Array(count)
+  const seed = new Float32Array(count)
+  for (let i = 0; i < count; i++) {
+    pos[i * 3] = (Math.random() - 0.5) * 24
+    pos[i * 3 + 1] = 1.0 + Math.random() * 9
+    pos[i * 3 + 2] = 1 + Math.random() * 11
+    size[i] = 16 + Math.pow(Math.random(), 3) * 84
+    seed[i] = Math.random()
+  }
+  const g = new BufferGeometry()
+  g.setAttribute('position', new BufferAttribute(pos, 3))
+  g.setAttribute('aSize', new BufferAttribute(size, 1))
+  g.setAttribute('aSeed', new BufferAttribute(seed, 1))
+  const m = new ShaderMaterial({
+    uniforms: { uTime: env.uTime, uPR: { value: 1 }, uAmt: { value: 1 }, uK: { value: 1 }, uTint: { value: new Color('#fff1de') } },
+    transparent: true,
+    depthWrite: false,
+    blending: AdditiveBlending,
+    vertexShader: /* glsl */ `
+      uniform float uTime, uPR, uAmt, uK;
+      attribute float aSize, aSeed;
+      varying float vA;
+      void main(){
+        vec3 p = position;
+        p.y += sin(uTime * 0.25 + aSeed * 20.0) * 0.35;
+        p.x += sin(uTime * 0.18 + aSeed * 11.0) * 0.4;
+        vec4 mv = viewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float d = -mv.z;
+        gl_PointSize = aSize * uK * uPR * (10.0 / d);
+        vA = uAmt * (0.35 + 0.65 * fract(aSeed * 7.3)) * smoothstep(1.5, 5.0, d);
+      }`,
+    fragmentShader: /* glsl */ `
+      uniform vec3 uTint;
+      varying float vA;
+      void main(){
+        float r = length(gl_PointCoord - 0.5) * 2.0;
+        float disc = smoothstep(1.0, 0.9, r);
+        float ring = smoothstep(0.55, 0.95, r);       // brighter rim, like a real lens bokeh
+        float a = disc * (0.35 + 0.65 * ring) * vA * 0.14;
+        if (a < 0.003) discard;
+        gl_FragColor = vec4(uTint, a);
+        #include <colorspace_fragment>
+      }`,
+  })
+  const p = new Points(g, m)
+  p.frustumCulled = false
+  return p
+}
+
+/** Render the sky shader into a cube and prefilter it: reflections now match the real clouds/sun. */
+function bakeSkyEnvironment(renderer, env) {
+  const s = new Scene()
+  const dome = createSky(env, { cloudOct: 3, lit: false })
+  s.add(dome)
+  env.uBelow.value = 1 // below the horizon the environment shows sea, not more sky
+  const pm = new PMREMGenerator(renderer)
+  const rt = pm.fromScene(s, 0)
+  pm.dispose()
+  env.uBelow.value = 0
+  dome.geometry.dispose()
+  dome.material.dispose()
+  return rt
+}
+
 // ── Scene ───────────────────────────────────────────────────────────────────
 export function buildBackdrop({ renderer, scene, camera, budget }) {
   const env = createEnv()
-  scene.add(createSky(env))
-  const ocean = createOcean(env, { radius: 420, rings: budget.oceanRings, seg: budget.oceanSeg })
+  scene.add(createSky(env, { cloudOct: budget.cloudOct, lit: budget.cloudLit }))
+  const ocean = createOcean(env, { radius: 420, rings: budget.oceanRings, seg: budget.oceanSeg, detail: budget.oceanDetail, reflOct: budget.reflOct })
   scene.add(ocean)
+  // PBR objects (the ship, the hero pieces) share the horizon haze via normal scene fog.
+  scene.fog = new FogExp2(env.uHorizon.value.clone(), env.uFogDensity.value)
 
-  // Image-based lighting: a studio "room" gives the glass pieces crisp reflections.
-  const pmrem = new PMREMGenerator(renderer)
-  const envRT = pmrem.fromScene(new RoomEnvironment(), 0.04)
+  const envRT = bakeSkyEnvironment(renderer, env)
   scene.environment = envRT.texture
-  pmrem.dispose()
 
-  const sun = new DirectionalLight('#ffe2bd', 2.4)
+  const sun = new DirectionalLight('#ffe2bd', 2.6)
   sun.position.copy(env.uSunDir.value).multiplyScalar(30)
-  scene.add(sun, new HemisphereLight('#dfe8ff', '#6f8fb5', 0.6))
+  scene.add(sun, new HemisphereLight('#dfe8ff', '#6f8fb5', 0.45))
 
-  // Glass pieces — pearly, iridescent, no transmission pass (cheap on phones).
-  const mat = (color) =>
-    new MeshPhysicalMaterial({
-      color,
-      roughness: 0.14,
-      metalness: 0.1,
-      clearcoat: 1,
-      clearcoatRoughness: 0.08,
-      iridescence: 0.7,
-      iridescenceIOR: 1.35,
-      iridescenceThicknessRange: [120, 420],
-      envMapIntensity: 1.15,
-    })
-  const shapes = new Group()
-  const anchor = new Mesh(buildAnchor(), mat('#eef2fb'))
-  const helm = new Mesh(buildHelm(), mat('#e0e9fb'))
-  const star = new Mesh(buildStar(), mat('#fbeade'))
-  const pearlGeo = new SphereGeometry(1, 32, 20)
-  const pearls = [0.34, 0.22, 0.46].map((r, i) => {
-    const p = new Mesh(pearlGeo, mat(['#f6f0ff', '#e6f3fb', '#fdeee6'][i]))
-    p.scale.setScalar(r)
-    return p
-  })
-  shapes.add(anchor, helm, star, ...pearls)
-  scene.add(shapes)
+  // Hero pieces: a brass-and-glass ship's wheel and a crystal anchor
+  const mats = makeMaterials(budget.glass)
+  const helm = createHelm(mats)
+  const anchor = createAnchor(mats)
+  const hero = new Group()
+  hero.add(helm, anchor)
+  scene.add(hero)
+
+  // A cruise liner on the horizon
+  const ship = createCruiseShip()
+  ship.scale.setScalar(1.15)
+  ship.rotation.y = -0.8
+  scene.add(ship)
+
+  const bokeh = budget.bokeh ? createBokeh(env, budget.bokeh) : null
+  if (bokeh) scene.add(bokeh)
 
   // Underwater life
   const jellyDefs = [
@@ -401,6 +404,13 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
   const shafts = createShafts(env, budget.jellies > 1 ? 7 : 4)
   scene.add(shafts)
 
+  // Post-processing (desktop): the composer owns tone mapping, so the renderer's is off while it runs.
+  let post = null
+  if (budget.post) {
+    post = createPost(renderer, scene, camera, window.innerWidth, window.innerHeight)
+    renderer.toneMapping = NoToneMapping
+  }
+
   // Pointer parallax (desktop only — touch devices have no hover position)
   const ptr = { x: 0, y: 0, tx: 0, ty: 0 }
   const onMove = (e) => {
@@ -410,8 +420,9 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
   const fine = matchMedia('(pointer: fine)').matches
   if (fine) window.addEventListener('pointermove', onMove, { passive: true })
 
-  // Responsive layout of the floating pieces
-  const layout = { anchor: null, helm: null, star: null, pearls: [] }
+  // Responsive layout of the hero pieces + horizon ship
+  const layout = { helm: null, anchor: null, shipX: 52 }
+  let pitchBias = 0 // portrait: look lower at rest so the horizon clears the body copy
   let jellyK = 1
   function place(aspect) {
     const portrait = aspect < 0.9
@@ -422,21 +433,17 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
     const dist = 12
     const halfH = Math.tan((camera.fov * Math.PI) / 360) * dist
     const halfW = halfH * aspect
-    const k = portrait ? 0.62 : 1
-    const baseY = 5.6
+    pitchBias = portrait ? 2.2 : 0
+    const baseY = 5.6 - pitchBias
     const at = (fx, fy, z, scale) => ({ x: fx * halfW, y: baseY + fy * halfH, z, scale })
-    layout.anchor = portrait ? at(0.52, 0.18, 2, 1.0 * k) : at(0.56, 0.02, 2, 1.0)
-    layout.helm = portrait ? at(-0.6, -0.3, 3.5, 0.95 * k) : at(-0.74, -0.2, 3.5, 0.9)
-    layout.star = portrait ? at(0.05, 0.72, 0, 0.7 * k) : at(-0.12, 0.62, 0, 0.7)
-    layout.pearls = [at(0.1, -0.1, 5, 1), at(0.86, 0.5, 1, 1), at(-0.35, 0.05, 6, 1)]
-    anchor.scale.setScalar(layout.anchor.scale)
-    helm.scale.setScalar(layout.helm.scale)
-    star.scale.setScalar(layout.star.scale)
+    layout.helm = portrait ? at(0.5, 0.3, 0, 0.8) : at(0.66, 0.0, 0, 1.4)
+    layout.anchor = portrait ? at(-0.46, 0.07, 2, 0.52) : at(-0.58, -0.4, 2, 1.05)
+    layout.shipX = portrait ? 6 : -4
   }
 
-  const col = new Color()
   const top = new Color()
   const bot = new Color()
+  const mid = new Color()
   const look = new Vector3()
   const cam = { y: 3.6, z: 14, ly: 6, lz: 0 }
   let aspectNow = 1
@@ -449,7 +456,7 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
     // Camera path: scripted dive during the hero, then a slow descent for the rest of the page.
     const ty = path(CAM_Y, dive) - deep * 72
     const tz = path(CAM_Z, dive)
-    const tly = path(LOOK_Y, dive) - deep * 72
+    const tly = path(LOOK_Y, dive) - deep * 72 - pitchBias * (1 - smooth(0, 0.35, dive))
     const tlz = path(LOOK_Z, dive)
     cam.y = damp(cam.y, ty, 7, dt)
     cam.z = damp(cam.z, tz, 7, dt)
@@ -457,7 +464,9 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
     cam.lz = damp(cam.lz, tlz, 7, dt)
     ptr.x = damp(ptr.x, ptr.tx, 3, dt)
     ptr.y = damp(ptr.y, ptr.ty, 3, dt)
-    camera.position.set(ptr.x * 0.9, cam.y + ptr.y * -0.25, cam.z)
+    // a whisper of handheld drift so the frame is never perfectly still
+    const sway = (1 - dive) * 0.06
+    camera.position.set(ptr.x * 0.9 + Math.sin(time * 0.31) * sway, cam.y + ptr.y * -0.25 + Math.sin(time * 0.43) * sway, cam.z)
     look.set(ptr.x * 0.5, cam.ly, cam.lz)
     camera.lookAt(look)
 
@@ -469,31 +478,40 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
     env.uDeepTop.value.copy(top)
     env.uDeepBottom.value.copy(bot)
     env.uShaftAmt.value = sub * Math.exp(-D / 40)
-    col.copy(bot).lerp(top, 0.342) // what the dome shows at the horizon = underwater fog colour
-    env.uFogColor.value.copy(env.uHorizon.value).lerp(col, sub)
+    mid.copy(bot).lerp(top, 0.342) // what the dome shows at the horizon = underwater fog colour
+    env.uFogColor.value.copy(env.uHorizon.value).lerp(mid, sub)
     env.uFogDensity.value = 0.0042 + sub * (0.011 + D * 0.0004)
+    scene.fog.color.copy(env.uFogColor.value)
+    scene.fog.density = env.uFogDensity.value
 
     ocean.position.set(camera.position.x, 0, camera.position.z)
     ocean.visible = D < 60
 
-    // Floating glass pieces: only drawn while they can be seen
-    const showShapes = dive < 0.82
-    shapes.visible = showShapes
-    if (showShapes) {
+    // Hero pieces: only drawn while they can be seen
+    const showHero = dive < 0.82
+    hero.visible = showHero
+    if (showHero) {
       const L = layout
-      // Pieces sway back and forth rather than spinning, so the thin anchor/star never go edge-on.
-      const spin = Math.sin(time * 0.33 + s.y * 0.0009)
-      const set = (m, l, i, rx, ry, rz) => {
-        m.position.set(l.x + ptr.x * 0.25 * (i + 1), l.y + Math.sin(time * 0.6 + i * 1.7) * 0.18 + dive * 3, l.z)
-        m.rotation.set(rx, ry, rz)
-      }
-      set(anchor, L.anchor, 0, Math.sin(time * 0.4) * 0.12, spin * 0.75 + ptr.x * 0.3, Math.sin(time * 0.35) * 0.14 - 0.1)
-      set(helm, L.helm, 1, -0.2 + ptr.y * 0.2, -0.35 + ptr.x * 0.3 + spin * 0.25, time * 0.12)
-      set(star, L.star, 2, Math.sin(time * 0.5) * 0.3, spin * 0.9, 0.2)
-      pearls.forEach((p, i) => {
-        const l = L.pearls[i]
-        p.position.set(l.x, l.y + Math.sin(time * 0.7 + i * 2.1) * 0.25 + dive * 4, l.z)
-      })
+      helm.position.set(L.helm.x + ptr.x * 0.3, L.helm.y + Math.sin(time * 0.5) * 0.12 + dive * 3, L.helm.z)
+      helm.scale.setScalar(L.helm.scale)
+      helm.rotation.set(-0.14 + ptr.y * 0.14, -0.4 + ptr.x * 0.25 + Math.sin(time * 0.3) * 0.1, time * 0.05 + s.y * 0.0008)
+      anchor.position.set(L.anchor.x + ptr.x * 0.5, L.anchor.y + Math.sin(time * 0.6 + 1.7) * 0.16 + dive * 4, L.anchor.z)
+      anchor.scale.setScalar(L.anchor.scale)
+      anchor.rotation.set(Math.sin(time * 0.4) * 0.08, -0.35 + Math.sin(time * 0.33) * 0.4 + ptr.x * 0.25, 0.3 + Math.sin(time * 0.35) * 0.1)
+    }
+
+    // Horizon ship: drifts, rides the swell, gone once we dive
+    ship.visible = cam.y > 1.2 && dive < 0.75
+    if (ship.visible) {
+      ship.position.set(layout.shipX + Math.sin(time * 0.05) * 3, waveHeight(layout.shipX, -125, time) * 0.35 - 0.1, -125)
+      ship.rotation.z = Math.sin(time * 0.55) * 0.012
+    }
+
+    if (bokeh) {
+      bokeh.visible = sub < 0.5 && dive < 0.7
+      bokeh.material.uniforms.uAmt.value = (1 - sub) * (1 - smooth(0.0, 0.6, dive))
+      bokeh.material.uniforms.uPR.value = renderer.getPixelRatio()
+      bokeh.material.uniforms.uK.value = Math.min(1, window.innerWidth / 1200)
     }
 
     // Underwater creatures: skip entirely while still above the surface
@@ -516,12 +534,29 @@ export function buildBackdrop({ renderer, scene, camera, budget }) {
     resize(w, h, aspect) {
       aspectNow = aspect
       place(aspect)
+      post?.setSize(w, h)
     },
     update,
+    // take over rendering while post-processing is on
+    render(dt) {
+      if (!post?.enabled) return false
+      post.render(dt)
+      return true
+    },
+    // the governor calls this first when frames are slow: drop post-processing before any resolution
+    quality(scale, w, h) {
+      if (!post?.enabled) return
+      if (scale < 0.85) {
+        post.enabled = false
+        renderer.toneMapping = ACESFilmicToneMapping
+      } else post.setSize(w, h)
+    },
     dispose() {
       window.removeEventListener('pointermove', onMove)
+      post?.dispose()
       envRT.dispose()
       scene.environment = null
+      scene.fog = null
     },
     get aspect() {
       return aspectNow
