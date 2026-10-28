@@ -1,6 +1,7 @@
 import { ArrowUp, Linkedin, Instagram, Facebook } from 'lucide-react'
 import Logo from './Logo.jsx'
 import { scrollToId, scrollToTop } from '../lib/scroll.js'
+import { photoCredits } from '../config/media.js'
 
 const cols = [
   {
@@ -39,6 +40,7 @@ const socials = [
 ]
 
 export default function Footer() {
+  const credits = photoCredits()
   return (
     <footer className="relative overflow-hidden border-t border-foam/10 bg-abyss/40 backdrop-blur-[2px]">
       <div className="container-x grid gap-12 py-16 sm:grid-cols-2 lg:grid-cols-[1.4fr_repeat(3,1fr)]">
@@ -75,6 +77,26 @@ export default function Footer() {
           </div>
         ))}
       </div>
+
+      {/* Photography credits — generated from config/media.js, so they track whatever photos are live */}
+      {credits.length > 0 && (
+        <p className="container-x pb-8 text-xs leading-relaxed text-foam/35">
+          Photography via{' '}
+          <a href="https://unsplash.com" className="underline decoration-foam/20 underline-offset-2 hover:text-foam/70">
+            Unsplash
+          </a>
+          :{' '}
+          {credits.map((c, i) => (
+            <span key={c.name}>
+              <a href={c.url} className="underline decoration-foam/20 underline-offset-2 hover:text-foam/70">
+                {c.name}
+              </a>
+              {i < credits.length - 1 ? ', ' : '.'}
+            </span>
+          ))}{' '}
+          Images are illustrative.
+        </p>
+      )}
 
       {/* Giant wordmark, clipped at the bottom edge (Noomo-style footer) */}
       <div aria-hidden="true" className="pointer-events-none -mb-[2.2vw] select-none whitespace-nowrap text-center">
